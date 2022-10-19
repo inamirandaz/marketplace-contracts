@@ -1,0 +1,27 @@
+[ 
+  { 
+    "vname": "_scilla_version", 
+    "type": "Uint32", 
+    "value": "0" 
+  }, 
+  { 
+    "vname": "initial_contract_owner", 
+    "type": "ByStr20", 
+    "value": "0xd90f2e538ce0df89c8273cad3b63ec44a3c4ed82" 
+  }, 
+  { 
+    "vname": "initial_base_uri", 
+    "type": "String", 
+    "value": "https://creatures-api.zilliqa.com/api/creature/" 
+  },   
+  { 
+    "vname": "name", 
+    "type": "String", 
+    "value": "My First NFT" 
+  }, 
+  { 
+    "vname": "symbol", 
+    "type": "String", 
+    "value": "MYNFT" 
+  } 
+] 

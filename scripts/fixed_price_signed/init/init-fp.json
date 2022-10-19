@@ -1,0 +1,18 @@
+[
+    {
+      "vname": "_scilla_version",
+      "type": "Uint32",
+      "value": "0"
+    },
+    {
+      "vname": "initial_contract_owner",
+      "type": "ByStr20",
+      "value": "0xd90f2e538ce0df89c8273cad3b63ec44a3c4ed82"
+    },
+    {
+        "vname": "initial_collection_contract",
+        "type": "ByStr20",
+"value" : "0x73609649b90d2cfce34e7452764f54fbb32cd076"
+    }    
+]
+
