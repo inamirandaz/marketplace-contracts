@@ -93,6 +93,28 @@ let compute_commission_fee =
           portion sale_price brand_commission_fee
     end
 
+
+let bystr16_empty_string: ByStr16 = 0x00000000000000000000000000000000
+let bystr20_empty_string: ByStr20 = 0x0000000000000000000000000000000000000000
+    
+
+let bystr_to_bystr16: ByStr -> ByStr16 =
+  fun(str : ByStr) =>
+    let bystr16 = builtin to_bystr16 str in
+      match bystr16 with
+        | Some res => res
+        | None => bystr16_empty_string
+      end
+
+let bystr_to_bystr20: ByStr -> ByStr20 =
+  fun(str : ByStr) =>
+    let bystr20 = builtin to_bystr20 str in
+      match bystr20 with
+        | Some res => res
+        | None => bystr20_empty_string
+        end
+    
+
 (* maker, expiration block number *)
 type Order = 
 | Order of ByStr20 BNum
@@ -131,6 +153,10 @@ type Error =
   | TotalFeesTooHigh
   | InvalidRoyaltyFeeBPSError
   | InvalidSignature
+  | TokenAddrNotMatchedMessageError
+  | TokenIdNotMatchedMessageError
+  | ToAddrNotMatchedMessageError
+
   
 let make_error =
   fun (result : Error) =>
@@ -158,6 +184,9 @@ let make_error =
       | TotalFeesTooHigh                   => Int32 -20
       | InvalidRoyaltyFeeBPSError          => Int32 -21
       | InvalidSignature                   => Int32 -22
+      | TokenAddrNotMatchedMessageError    => Int32 -23
+      | TokenIdNotMatchedMessageError      => Int32 -24
+      | ToAddrNotMatchedMessageError       => Int32 -25   
       end
     in
     { _exception : "Error"; code : result_code }
@@ -474,6 +503,45 @@ procedure RequireSenderNotToBeTokenOwner(token_address: ByStr20 with contract fi
     Throw error
   end
 end
+
+procedure IsTokenAddrInMessageMatch(msg_token_addr: ByStr20, token_address: ByStr20 )
+  (* does the token address match *)
+  is_match = builtin eq msg_token_addr token_address;
+  match is_match with
+  | True =>
+  | False =>
+    err = TokenAddrNotMatchedMessageError;
+    Throw err
+  end
+end
+
+procedure IsTokenIdInMessageMatch(msg_token_id: Uint256, token_id: Uint256 )
+  (* does the token address match *)
+  is_match = builtin eq msg_token_id token_id;
+  match is_match with
+  | True =>
+  | False =>
+    err = TokenIdNotMatchedMessageError;
+    Throw err
+  end
+end
+
+
+
+procedure IsToAddrInMessageMatch(msg_to_addr: ByStr20, dest: ByStr20 )
+  (* does the recipient match *)
+  is_match = builtin eq msg_to_addr dest;
+  match is_match with
+  | True =>
+  | False =>
+    err = ToAddrNotMatchedMessageError;
+    Throw err
+  end
+end
+
+
+
+
 
 procedure ZRC2TransferFrom(payment_token_address: ByStr20, from: ByStr20, to: ByStr20, amount: Uint128)
   msg_to_zrc2 = {
@@ -897,6 +965,38 @@ transition FulfillOrder(
         match is_native_zil with
         | False => 
         | True => 
+
+          (* Check if the fields inside the message match the order params *)
+
+          (* 00-19 : token address *)
+          (* 20-35 : token id *)
+          (* 36-55 : destination address *)
+          token_addr_offset = Uint32 0;
+          token_id_offset = Uint32 20;
+          to_addr_offset = Uint32 36;
+          id_len = Uint32 16;
+          addr_len = Uint32 20;
+
+          token_addr_bystr = builtin substr message token_addr_offset addr_len;
+          token_id_bystr = builtin substr message token_id_offset id_len;
+          to_addr_bystr = builtin substr message to_addr_offset addr_len;
+
+          msg_token_addr = bystr_to_bystr20 token_addr_bystr;
+          msg_to_addr = bystr_to_bystr20 to_addr_bystr;
+          
+          msg_token_id_bystr16 = bystr_to_bystr16 token_id_bystr;
+          (* TODO: token id in the message should be changed to uint256 *)
+          msg_token_id = builtin to_uint256 msg_token_id_bystr16;
+
+          (* does the token address match *)
+          IsTokenAddrInMessageMatch msg_token_addr token_address;
+
+          (* does the token id match *)
+          IsTokenIdInMessageMatch msg_token_id token_id;
+
+          (* does the to address match *)
+          IsToAddrInMessageMatch msg_to_addr dest;
+
           (* _amount must be equal to sale_price *)
           RequireEqualZILAmount sale_price;
           (* ZILs must be accepted only if a sell order is fulfilled *)
