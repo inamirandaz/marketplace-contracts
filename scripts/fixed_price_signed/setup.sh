@@ -2,10 +2,12 @@
 
 ISOLATED_SERVER_PATH="/home/ina/Projects/zilliqa-isolated-server"
 cd $ISOLATED_SERVER_PATH
-docker container prune
+docker rm -f isolated-server
 docker run -d -p 5555:5555   --name isolated-server   isolated-server:1.0
 docker container ls
 cd -
+
+sleep 3
 
 echo "Deploying ZRC6"
 ZRC6_FILE="zrc6_rialto_v0.1.scilla"
