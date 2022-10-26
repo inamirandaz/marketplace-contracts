@@ -317,11 +317,15 @@ async function RegPubkey(privkey, contract, pubkey)
         },
     ]
 
-    SendTransaction('RegisterVerifier', param, privkey, contract, 0)
+    SendTransaction('SetVerifier', param, privkey, contract, 0)
 }
 
+async function ClearPubkey(privkey, contract)
+{ 
+    const param = []
 
-
+    SendTransaction('ClearVerifier', param, privkey, contract, 0)
+}
 
 
 
@@ -419,6 +423,14 @@ async function RegPubkey(privkey, contract, pubkey)
             )
             break;
 
+        case 'clearpubkey' :
+            contract = args[1]
+            ClearPubkey(
+                privkey,
+                contract
+            )
+            break;
+
         default:
             console.log('\nTransitions:')
             console.log('1. batchmint <zrc6 addr> <start> <count>')
@@ -427,6 +439,7 @@ async function RegPubkey(privkey, contract, pubkey)
             console.log('4. setorder <fixed price addr> <nft addr> <token id>')
             console.log('5. fulfillorder <fixed price addr> <nft addr> <token id>')
             console.log('6. regpubkey <fixed price addr> <pubkey')
+            console.log('7. clearpubkey <fixed price addr>')
 
     }
     

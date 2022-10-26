@@ -172,6 +172,7 @@ type Error =
   | InvalidSignature
   | OrderNotAuthorized
   | OrderExpired
+  | InvalidVerifier
 
 
   
@@ -203,6 +204,7 @@ let make_error =
       | InvalidSignature                   => Int32 -22
       | OrderNotAuthorized                 => Int32 -26
       | OrderExpired                       => Int32 -27
+      | InvalidVerifier                    => Int32 -28  
 
       end
     in
@@ -579,6 +581,17 @@ procedure IsBlockNumberWithinRange(blocknum_data : Uint128)
 end
 
 
+procedure RequireValidVerifer()
+  pub_key <- verifier_pub_key;
+  is_zero_pubkey = builtin eq pub_key zero_pubkey;
+  match is_zero_pubkey with
+  | False =>
+  | True =>
+    error = InvalidVerifier;
+    Throw error
+  end
+end
+
 procedure RequireValidVerifierSignature(
   token_address: ByStr20,
   token_id: Uint256,
@@ -589,6 +602,7 @@ procedure RequireValidVerifierSignature(
   message: ByStr,
   signature: ByStr64
 )
+  RequireValidVerifer;
 
   (* Verify if signature is valid *)
   pub_key <- verifier_pub_key;
@@ -1329,17 +1343,32 @@ transition AcceptContractOwnership()
 end
 
 (* @multi-sig *)
-transition RegisterVerifier(pub_key: ByStr33)
+transition SetVerifier(pub_key: ByStr33)
   RequireContractOwner;
   
   verifier_pub_key := pub_key;
 
   e = {
-    _eventname: "RegisterVerifier";
+    _eventname: "SetVerifier";
     pub_key: pub_key
   };
   event e  
 end
+
+
+(* @multi-sig *)
+transition ClearVerifier()
+  RequireContractOwner;
+  
+  verifier_pub_key := zero_pubkey;
+
+  e = {
+    _eventname: "ClearVerifier"
+  };
+  event e  
+end
+
+
 
 (* empty callbacks *)
 transition ZRC6_TransferFromCallback(from:ByStr20, to: ByStr20, token_id: Uint256)
