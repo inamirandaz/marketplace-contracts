@@ -592,6 +592,9 @@ procedure RequireValidVerifierSignature(
     Throw error
   | True =>
 
+    (* Verify if the fields in the message match the order params *)
+
+    (* Offset table for the params: *)
     (* 00-19 : token address *)
     (* 20-35 : token id *)
     (* 36-55 : destination address *)
@@ -613,56 +616,44 @@ procedure RequireValidVerifierSignature(
     side_len = Uint32 4;
     price_len = Uint32 16; 
     bnum_len = Uint32 16;
-    
-    (* extract individual params as bystr from the message *)
+
+    (* Check token address *)
     token_addr_bystr = builtin substr message token_addr_offset addr_len;
-    token_id_bystr = builtin substr message token_id_offset id_len;
-    to_addr_bystr = builtin substr message to_addr_offset addr_len;
-    side_bystr = builtin substr message side_offset side_len;
-    price_bystr = builtin substr message price_offset price_len;
-    payment_token_addr_bystr =  builtin substr message payment_token_addr_offset addr_len;
-    bnum_bystr = builtin substr message bnum_offset bnum_len;
-
-    (* convert address *)
     msg_token_addr = bystr_to_bystr20 token_addr_bystr;
-    msg_to_addr = bystr_to_bystr20 to_addr_bystr;
-    msg_payment_token_addr = bystr_to_bystr20 payment_token_addr_bystr;
-    
-    (* convert token id *)
-    msg_token_id_bystr16 = bystr_to_bystr16 token_id_bystr;
-    msg_token_id = builtin to_uint256 msg_token_id_bystr16; (* TODO: token id in the message should be changed to uint256 *)
-
-    (* convert side *)
-    msg_side_bystr4 = bystr_to_bystr4 side_bystr;
-    msg_side =  builtin to_uint32 msg_side_bystr4;
-
-    (* convert price *)
-    msg_price_bystr16 = bystr_to_bystr16 price_bystr;
-    msg_price =  builtin to_uint128 msg_price_bystr16;
-
-    (* convert blocnumber *)
-    msg_bnum_bystr16 = bystr_to_bystr16 bnum_bystr;
-    msg_bnum =  builtin to_uint128 msg_bnum_bystr16;
-
-
-    (* does the token address match *)
     RequireAddrInMessageToMatch msg_token_addr token_address;
 
-    (* does the token id match *)
+    (* Check token ID *)
+    token_id_bystr = builtin substr message token_id_offset id_len;
+    msg_token_id_bystr16 = bystr_to_bystr16 token_id_bystr;
+    msg_token_id = builtin to_uint256 msg_token_id_bystr16; (* TODO: token id in the message should be changed to uint256 *)
     RequireTokenIdInMessageToMatch msg_token_id token_id;
 
-    (* does the to address match *)
+    (* Check destination *)
+    to_addr_bystr = builtin substr message to_addr_offset addr_len;
+    msg_to_addr = bystr_to_bystr20 to_addr_bystr;
     RequireAddrInMessageToMatch msg_to_addr dest;
 
-    (* does the side match *)
+    (* Check sell/buy side *)
+    side_bystr = builtin substr message side_offset side_len;
+    msg_side_bystr4 = bystr_to_bystr4 side_bystr;
+    msg_side =  builtin to_uint32 msg_side_bystr4;
     RequireSideInMessageToMatch msg_side side;
 
-    (* does the price match *)
+    (* Check price *)
+    price_bystr = builtin substr message price_offset price_len;
+    msg_price_bystr16 = bystr_to_bystr16 price_bystr;
+    msg_price =  builtin to_uint128 msg_price_bystr16;    
     RequirePriceInMessageToMatch msg_price sale_price;
 
-    (* does the to address match *)
+    (* Check payment token address *)
+    payment_token_addr_bystr =  builtin substr message payment_token_addr_offset addr_len;
+    msg_payment_token_addr = bystr_to_bystr20 payment_token_addr_bystr;
     RequireAddrInMessageToMatch msg_payment_token_addr payment_token_address;
 
+    (* Check block expiry*)
+    bnum_bystr = builtin substr message bnum_offset bnum_len;
+    msg_bnum_bystr16 = bystr_to_bystr16 bnum_bystr;
+    msg_bnum =  builtin to_uint128 msg_bnum_bystr16;
     IsBlockNumberWithinRange msg_bnum
 
   end
