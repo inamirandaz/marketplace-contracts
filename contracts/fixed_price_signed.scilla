@@ -96,7 +96,8 @@ let compute_commission_fee =
 let bystr4_empty_string: ByStr4 = 0x00000000
 let bystr16_empty_string: ByStr16 = 0x00000000000000000000000000000000
 let bystr20_empty_string: ByStr20 = 0x0000000000000000000000000000000000000000
-    
+let bystr32_empty_string: ByStr32 = 0x0000000000000000000000000000000000000000000000000000000000000000
+
 
 
 let bystr_to_bystr4: ByStr -> ByStr4 =
@@ -122,7 +123,14 @@ let bystr_to_bystr20: ByStr -> ByStr20 =
         | Some res => res
         | None => bystr20_empty_string
         end
-    
+
+let bystr_to_bystr32: ByStr -> ByStr32 =
+  fun(str : ByStr) =>
+    let bystr32 = builtin to_bystr32 str in
+      match bystr32 with
+        | Some res => res
+        | None => bystr32_empty_string
+        end
 
 (* maker, expiration block number *)
 type Order = 
@@ -596,22 +604,22 @@ procedure RequireValidVerifierSignature(
 
     (* Offset table for the params: *)
     (* 00-19 : token address *)
-    (* 20-35 : token id *)
-    (* 36-55 : destination address *)
-    (* 56-59 : side *)
-    (* 60-75 : price *)
-    (* 76-95 : payment token addr *)
-    (* 96-111 : block number*)
+    (* 20-51 : token id *)
+    (* 52-71 : destination address *)
+    (* 72-75 : side *)
+    (* 76-94 : price *)
+    (* 92-111 : payment token addr *)
+    (* 112-127 : block number*)
     token_addr_offset = Uint32 0;
     token_id_offset = Uint32 20;
-    to_addr_offset = Uint32 36;
-    side_offset = Uint32 56;
-    price_offset = Uint32 60;
-    payment_token_addr_offset = Uint32 76;
-    bnum_offset = Uint32 96;
+    to_addr_offset = Uint32 52;
+    side_offset = Uint32 72;
+    price_offset = Uint32 76;
+    payment_token_addr_offset = Uint32 92;
+    bnum_offset = Uint32 112;
 
     (* length in bytes*)
-    id_len = Uint32 16;
+    id_len = Uint32 32;
     addr_len = Uint32 20;
     side_len = Uint32 4;
     price_len = Uint32 16; 
@@ -624,8 +632,8 @@ procedure RequireValidVerifierSignature(
 
     (* Check token ID *)
     token_id_bystr = builtin substr message token_id_offset id_len;
-    msg_token_id_bystr16 = bystr_to_bystr16 token_id_bystr;
-    msg_token_id = builtin to_uint256 msg_token_id_bystr16; (* TODO: token id in the message should be changed to uint256 *)
+    msg_token_id_bystr32 = bystr_to_bystr32 token_id_bystr;
+    msg_token_id = builtin to_uint256 msg_token_id_bystr32;
     RequireTokenIdInMessageToMatch msg_token_id token_id;
 
     (* Check destination *)

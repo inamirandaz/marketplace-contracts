@@ -188,7 +188,7 @@ async function getCurrentBlockNumber()
 
 async function SerializeMessage(tokenAddr, tokenId, dest, side, price, payment_token_addr, bnum)
 {
-    const tokenIdHexArray = bytes.intToHexArray(parseInt(tokenId), 32);
+    const tokenIdHexArray = bytes.intToHexArray(parseInt(tokenId), 64);
     const sideHexArray = bytes.intToHexArray(parseInt(side), 8);
     const priceHexArray = bytes.intToHexArray(parseInt(price), 32);
     const bnumHexArray = bytes.intToHexArray(bnum, 32);
