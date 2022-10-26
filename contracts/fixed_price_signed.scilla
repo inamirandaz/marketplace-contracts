@@ -93,10 +93,19 @@ let compute_commission_fee =
           portion sale_price brand_commission_fee
     end
 
-
+let bystr4_empty_string: ByStr4 = 0x00000000
 let bystr16_empty_string: ByStr16 = 0x00000000000000000000000000000000
 let bystr20_empty_string: ByStr20 = 0x0000000000000000000000000000000000000000
     
+
+
+let bystr_to_bystr4: ByStr -> ByStr4 =
+  fun(str : ByStr) =>
+    let bystr4 = builtin to_bystr4 str in
+      match bystr4 with
+        | Some res => res
+        | None => bystr4_empty_string
+      end
 
 let bystr_to_bystr16: ByStr -> ByStr16 =
   fun(str : ByStr) =>
@@ -153,9 +162,8 @@ type Error =
   | TotalFeesTooHigh
   | InvalidRoyaltyFeeBPSError
   | InvalidSignature
-  | TokenAddrNotMatchedMessageError
-  | TokenIdNotMatchedMessageError
-  | ToAddrNotMatchedMessageError
+  | OrderNotAuthorized
+
 
   
 let make_error =
@@ -184,9 +192,8 @@ let make_error =
       | TotalFeesTooHigh                   => Int32 -20
       | InvalidRoyaltyFeeBPSError          => Int32 -21
       | InvalidSignature                   => Int32 -22
-      | TokenAddrNotMatchedMessageError    => Int32 -23
-      | TokenIdNotMatchedMessageError      => Int32 -24
-      | ToAddrNotMatchedMessageError       => Int32 -25   
+      | OrderNotAuthorized                 => Int32 -26
+
       end
     in
     { _exception : "Error"; code : result_code }
@@ -504,43 +511,149 @@ procedure RequireSenderNotToBeTokenOwner(token_address: ByStr20 with contract fi
   end
 end
 
-procedure IsTokenAddrInMessageMatch(msg_token_addr: ByStr20, token_address: ByStr20 )
-  (* does the token address match *)
-  is_match = builtin eq msg_token_addr token_address;
+procedure RequireAddrInMessageToMatch(msg_addr: ByStr20, order_addr: ByStr20 )
+  is_match = builtin eq msg_addr order_addr;
   match is_match with
   | True =>
   | False =>
-    err = TokenAddrNotMatchedMessageError;
+    err = OrderNotAuthorized;
     Throw err
   end
 end
 
-procedure IsTokenIdInMessageMatch(msg_token_id: Uint256, token_id: Uint256 )
-  (* does the token address match *)
-  is_match = builtin eq msg_token_id token_id;
+procedure RequireTokenIdInMessageToMatch(msg_token_id: Uint256, order_token_id: Uint256 )
+  is_match = builtin eq msg_token_id order_token_id;
   match is_match with
   | True =>
   | False =>
-    err = TokenIdNotMatchedMessageError;
+    err = OrderNotAuthorized;
+    Throw err
+  end
+end
+
+procedure RequireSideInMessageToMatch(msg_side: Uint32, order_side: Uint32 )
+  is_match = builtin eq msg_side order_side;
+  match is_match with
+  | True =>
+  | False =>
+    err = OrderNotAuthorized;
+    Throw err
+  end
+end
+
+procedure RequirePriceInMessageToMatch(msg_price: Uint128, order_price: Uint128 )
+  is_match = builtin eq msg_price order_price;
+  match is_match with
+  | True =>
+  | False =>
+    err = OrderNotAuthorized;
     Throw err
   end
 end
 
 
-
-procedure IsToAddrInMessageMatch(msg_to_addr: ByStr20, dest: ByStr20 )
-  (* does the recipient match *)
-  is_match = builtin eq msg_to_addr dest;
-  match is_match with
+(* Check if blocknumber sent in signed data is within 5 blocks of the current block *)
+procedure IsBlockNumberWithinRange(blocknum_data : Uint128)
+  current_block <- & BLOCKNUMBER;
+  
+  five_bnum = BNum 5;
+  
+  blocknum_data_bnum = builtin badd five_bnum blocknum_data;
+  bnum_limit = builtin blt current_block blocknum_data_bnum;
+  match bnum_limit with
   | True =>
   | False =>
-    err = ToAddrNotMatchedMessageError;
+    err = OrderNotAuthorized;
     Throw err
   end
 end
 
 
+procedure RequireValidVerifierSignature(
+  token_address: ByStr20,
+  token_id: Uint256,
+  dest: ByStr20,
+  payment_token_address: ByStr20,
+  sale_price: Uint128,
+  side: Uint32,
+  message: ByStr,
+  signature: ByStr64
+)
 
+  (* Verify if signature is valid *)
+  pub_key <- verifier_pub_key;
+  is_valid = builtin ecdsa_verify pub_key message signature;
+
+  match is_valid with
+  | False =>
+    error = InvalidSignature;
+    Throw error
+  | True =>
+
+    (* 00-19 : token address *)
+    (* 20-35 : token id *)
+    (* 36-55 : destination address *)
+    (* 56-59 : side *)
+    (* 60-75 : price *)
+    (* 76-95 : payment token addr *)
+    token_addr_offset = Uint32 0;
+    token_id_offset = Uint32 20;
+    to_addr_offset = Uint32 36;
+    side_offset = Uint32 56;
+    price_offset = Uint32 60;
+    payment_token_addr_offset = Uint32 76;
+
+    (* length in bytes*)
+    id_len = Uint32 16;
+    addr_len = Uint32 20;
+    side_len = Uint32 4;
+    price_len = Uint32 16; 
+    
+    (* extract individual params as bystr from the message *)
+    token_addr_bystr = builtin substr message token_addr_offset addr_len;
+    token_id_bystr = builtin substr message token_id_offset id_len;
+    to_addr_bystr = builtin substr message to_addr_offset addr_len;
+    side_bystr = builtin substr message side_offset side_len;
+    price_bystr = builtin substr message price_offset price_len;
+    payment_token_addr_bystr =  builtin substr message payment_token_addr_offset addr_len;
+
+    (* convert address *)
+    msg_token_addr = bystr_to_bystr20 token_addr_bystr;
+    msg_to_addr = bystr_to_bystr20 to_addr_bystr;
+    msg_payment_token_addr = bystr_to_bystr20 payment_token_addr_bystr;
+    
+    (* convert token id *)
+    msg_token_id_bystr16 = bystr_to_bystr16 token_id_bystr;
+    msg_token_id = builtin to_uint256 msg_token_id_bystr16; (* TODO: token id in the message should be changed to uint256 *)
+
+    (* convert side *)
+    msg_side_bystr4 = bystr_to_bystr4 side_bystr;
+    msg_side =  builtin to_uint32 msg_side_bystr4;
+
+    (* convert price *)
+    msg_price_bystr16 = bystr_to_bystr16 price_bystr;
+    msg_price =  builtin to_uint128 msg_price_bystr16;
+
+    (* does the token address match *)
+    RequireAddrInMessageToMatch msg_token_addr token_address;
+
+    (* does the token id match *)
+    RequireTokenIdInMessageToMatch msg_token_id token_id;
+
+    (* does the to address match *)
+    RequireAddrInMessageToMatch msg_to_addr dest;
+
+    (* does the side match *)
+    RequireSideInMessageToMatch msg_side side;
+
+    (* does the price match *)
+    RequirePriceInMessageToMatch msg_price sale_price;
+
+    (* does the to address match *)
+    RequireAddrInMessageToMatch msg_payment_token_addr payment_token_address
+
+  end
+end
 
 
 procedure ZRC2TransferFrom(payment_token_address: ByStr20, from: ByStr20, to: ByStr20, amount: Uint128)
@@ -935,6 +1048,8 @@ transition FulfillOrder(
   RequireAllowedUser dest;
   RequireValidDestination dest;
 
+  RequireValidVerifierSignature token_address token_id dest payment_token_address sale_price side message signature;
+
   is_sell_order = builtin eq side sell_side;
   match is_sell_order with 
   | True => 
@@ -951,70 +1066,29 @@ transition FulfillOrder(
       RequireNotExpired expiration_bnum;
       (* Sender must not be the seller *)
       RequireNotSelf seller;
+      
+      (* The currency is ZIL if the payment_token_address is zero address *)
+      is_native_zil = builtin eq payment_token_address zero_address;
+      match is_native_zil with
+      | False => 
+      | True => 
+        (* _amount must be equal to sale_price *)
+        RequireEqualZILAmount sale_price;
+        (* ZILs must be accepted only if a sell order is fulfilled *)
+        accept
+      end;
 
-      (* Verify if signature is valid *)
-      pub_key <- verifier_pub_key;
-      is_valid = builtin ecdsa_verify pub_key message signature;
-      match is_valid with
-      | False =>
-        error = InvalidSignature;
-        Throw error
-      | True =>      
-        (* The currency is ZIL if the payment_token_address is zero address *)
-        is_native_zil = builtin eq payment_token_address zero_address;
-        match is_native_zil with
-        | False => 
-        | True => 
+      HandleFulfillOrder token_address token_id payment_token_address sale_price buyer seller side dest;
+      
+      (* Remove all sell orders. *)
+      (* When a sell order is fulfilled, the sell order is removed and the other sell orders for the token are also removed. *)
+      
+      (* Note that we should keep the buy orders for the new owner. *)
+      (* The following is the reasons why the existing buy orders should not be removed: *) 
+      (* a) The buyers don't have to create new buy orders every single time whenever the owner of the token has changed. *)
+      (* b) The new owner can sell the token again shortly by fulfilling existing buy orders. *)
 
-          (* Check if the fields inside the message match the order params *)
-
-          (* 00-19 : token address *)
-          (* 20-35 : token id *)
-          (* 36-55 : destination address *)
-          token_addr_offset = Uint32 0;
-          token_id_offset = Uint32 20;
-          to_addr_offset = Uint32 36;
-          id_len = Uint32 16;
-          addr_len = Uint32 20;
-
-          token_addr_bystr = builtin substr message token_addr_offset addr_len;
-          token_id_bystr = builtin substr message token_id_offset id_len;
-          to_addr_bystr = builtin substr message to_addr_offset addr_len;
-
-          msg_token_addr = bystr_to_bystr20 token_addr_bystr;
-          msg_to_addr = bystr_to_bystr20 to_addr_bystr;
-          
-          msg_token_id_bystr16 = bystr_to_bystr16 token_id_bystr;
-          (* TODO: token id in the message should be changed to uint256 *)
-          msg_token_id = builtin to_uint256 msg_token_id_bystr16;
-
-          (* does the token address match *)
-          IsTokenAddrInMessageMatch msg_token_addr token_address;
-
-          (* does the token id match *)
-          IsTokenIdInMessageMatch msg_token_id token_id;
-
-          (* does the to address match *)
-          IsToAddrInMessageMatch msg_to_addr dest;
-
-          (* _amount must be equal to sale_price *)
-          RequireEqualZILAmount sale_price;
-          (* ZILs must be accepted only if a sell order is fulfilled *)
-          accept
-        end;
-
-        HandleFulfillOrder token_address token_id payment_token_address sale_price buyer seller side dest;
-        
-        (* Remove all sell orders. *)
-        (* When a sell order is fulfilled, the sell order is removed and the other sell orders for the token are also removed. *)
-        
-        (* Note that we should keep the buy orders for the new owner. *)
-        (* The following is the reasons why the existing buy orders should not be removed: *) 
-        (* a) The buyers don't have to create new buy orders every single time whenever the owner of the token has changed. *)
-        (* b) The new owner can sell the token again shortly by fulfilling existing buy orders. *)
-
-        delete sell_orders[token_address][token_id]
-      end
+      delete sell_orders[token_address][token_id]
     end
   | False => 
     (* Side: Buy *)
@@ -1242,14 +1316,14 @@ transition AcceptContractOwnership()
   end
 end
 
-
-transition RegisterPubKey(pub_key: ByStr33)
+(* @multi-sig *)
+transition RegisterVerifier(pub_key: ByStr33)
   RequireContractOwner;
   
   verifier_pub_key := pub_key;
 
   e = {
-    _eventname: "RegisterPubKey";
+    _eventname: "RegisterVerifier";
     pub_key: pub_key
   };
   event e  

@@ -180,13 +180,22 @@ async function SetOrder(privkey, contract, tokenAddr,
 }
 
 
-async function SerializeMessage(tokenAddr, tokenId, dest)
+async function SerializeMessage(tokenAddr, tokenId, dest, side, price, payment_token_addr)
 {
-    msg = "0x" 
-            + tokenAddr.substring(2) 
-            + String(tokenId).padStart(32, '0')
-            + dest.substring(2)
+    const tokenIdHexArray = bytes.intToHexArray(parseInt(tokenId), 32);
+    const sideHexArray = bytes.intToHexArray(parseInt(side), 8);
+    const priceHexArray = bytes.intToHexArray(parseInt(price), 32);
 
+    // Concat data to serialize
+    msg = [tokenAddr.substring(2)]                      //remove '0x'
+            .concat(tokenIdHexArray)
+            .concat([dest.substring(2)])                //remove '0x'
+            .concat(sideHexArray)
+            .concat(priceHexArray)
+            .concat([payment_token_addr.substring(2)])  //remove '0x'
+            .join('');
+
+    msg = '0x' + msg
     console.log('serialized msg ' + msg)
     return msg
 }
@@ -222,8 +231,8 @@ async function SignMessage(privkey, msg)
 async function FulfillOrder(signer, privkey, contract, tokenAddr, 
                             tokenId, price, side, dest) 
 {
-  
-    const msg = await(SerializeMessage(tokenAddr, tokenId, dest))
+    const payment_token_addr = "0x0000000000000000000000000000000000000000"
+    const msg = await(SerializeMessage(tokenAddr, tokenId, dest, side, price, payment_token_addr))
     const signature = await(SignMessage(signer, msg))
     
     const param = [
@@ -240,7 +249,7 @@ async function FulfillOrder(signer, privkey, contract, tokenAddr,
         {
             "vname":"payment_token_address",
             "type":"ByStr20",
-            "value": "0x0000000000000000000000000000000000000000"
+            "value": payment_token_addr
         },
         {
             "vname":"sale_price",
@@ -283,7 +292,7 @@ async function RegPubkey(privkey, contract, pubkey)
         },
     ]
 
-    SendTransaction('RegisterPubKey', param, privkey, contract, 0)
+    SendTransaction('RegisterVerifier', param, privkey, contract, 0)
 }
 
 
