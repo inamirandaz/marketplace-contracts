@@ -163,6 +163,7 @@ type Error =
   | InvalidRoyaltyFeeBPSError
   | InvalidSignature
   | OrderNotAuthorized
+  | OrderExpired
 
 
   
@@ -193,6 +194,7 @@ let make_error =
       | InvalidRoyaltyFeeBPSError          => Int32 -21
       | InvalidSignature                   => Int32 -22
       | OrderNotAuthorized                 => Int32 -26
+      | OrderExpired                       => Int32 -27
 
       end
     in
@@ -563,7 +565,7 @@ procedure IsBlockNumberWithinRange(blocknum_data : Uint128)
   match bnum_limit with
   | True =>
   | False =>
-    err = OrderNotAuthorized;
+    err = OrderExpired;
     Throw err
   end
 end
@@ -596,18 +598,21 @@ procedure RequireValidVerifierSignature(
     (* 56-59 : side *)
     (* 60-75 : price *)
     (* 76-95 : payment token addr *)
+    (* 96-111 : block number*)
     token_addr_offset = Uint32 0;
     token_id_offset = Uint32 20;
     to_addr_offset = Uint32 36;
     side_offset = Uint32 56;
     price_offset = Uint32 60;
     payment_token_addr_offset = Uint32 76;
+    bnum_offset = Uint32 96;
 
     (* length in bytes*)
     id_len = Uint32 16;
     addr_len = Uint32 20;
     side_len = Uint32 4;
     price_len = Uint32 16; 
+    bnum_len = Uint32 16;
     
     (* extract individual params as bystr from the message *)
     token_addr_bystr = builtin substr message token_addr_offset addr_len;
@@ -616,6 +621,7 @@ procedure RequireValidVerifierSignature(
     side_bystr = builtin substr message side_offset side_len;
     price_bystr = builtin substr message price_offset price_len;
     payment_token_addr_bystr =  builtin substr message payment_token_addr_offset addr_len;
+    bnum_bystr = builtin substr message bnum_offset bnum_len;
 
     (* convert address *)
     msg_token_addr = bystr_to_bystr20 token_addr_bystr;
@@ -634,6 +640,11 @@ procedure RequireValidVerifierSignature(
     msg_price_bystr16 = bystr_to_bystr16 price_bystr;
     msg_price =  builtin to_uint128 msg_price_bystr16;
 
+    (* convert blocnumber *)
+    msg_bnum_bystr16 = bystr_to_bystr16 bnum_bystr;
+    msg_bnum =  builtin to_uint128 msg_bnum_bystr16;
+
+
     (* does the token address match *)
     RequireAddrInMessageToMatch msg_token_addr token_address;
 
@@ -650,7 +661,9 @@ procedure RequireValidVerifierSignature(
     RequirePriceInMessageToMatch msg_price sale_price;
 
     (* does the to address match *)
-    RequireAddrInMessageToMatch msg_payment_token_addr payment_token_address
+    RequireAddrInMessageToMatch msg_payment_token_addr payment_token_address;
+
+    IsBlockNumberWithinRange msg_bnum
 
   end
 end

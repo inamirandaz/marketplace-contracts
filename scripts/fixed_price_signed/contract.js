@@ -179,12 +179,20 @@ async function SetOrder(privkey, contract, tokenAddr,
     SendTransaction('SetOrder', param, privkey, contract, 0)
 }
 
+async function getCurrentBlockNumber() 
+{
+    const response = await zilliqa.blockchain.getNumTxBlocks();
+    const bNum = parseInt(response.result, 10);
+    return bNum;
+}
 
-async function SerializeMessage(tokenAddr, tokenId, dest, side, price, payment_token_addr)
+async function SerializeMessage(tokenAddr, tokenId, dest, side, price, payment_token_addr, bnum)
 {
     const tokenIdHexArray = bytes.intToHexArray(parseInt(tokenId), 32);
     const sideHexArray = bytes.intToHexArray(parseInt(side), 8);
     const priceHexArray = bytes.intToHexArray(parseInt(price), 32);
+    const bnumHexArray = bytes.intToHexArray(bnum, 32);
+
 
     // Concat data to serialize
     msg = [tokenAddr.substring(2)]                      //remove '0x'
@@ -193,6 +201,7 @@ async function SerializeMessage(tokenAddr, tokenId, dest, side, price, payment_t
             .concat(sideHexArray)
             .concat(priceHexArray)
             .concat([payment_token_addr.substring(2)])  //remove '0x'
+            .concat(bnumHexArray)
             .join('');
 
     msg = '0x' + msg
@@ -228,11 +237,27 @@ async function SignMessage(privkey, msg)
 }
 
 
+
 async function FulfillOrder(signer, privkey, contract, tokenAddr, 
                             tokenId, price, side, dest) 
 {
     const payment_token_addr = "0x0000000000000000000000000000000000000000"
-    const msg = await(SerializeMessage(tokenAddr, tokenId, dest, side, price, payment_token_addr))
+    
+    //use this for local isolated server
+    const bnum = 1 
+ 
+    //othewise use this
+    // const bnum = await(getCurrentBlockNumber())
+ 
+    const msg = await(SerializeMessage(
+                            tokenAddr, 
+                            tokenId, 
+                            dest, 
+                            side, 
+                            price, 
+                            payment_token_addr, 
+                            bnum)
+                    )
     const signature = await(SignMessage(signer, msg))
     
     const param = [
@@ -294,6 +319,10 @@ async function RegPubkey(privkey, contract, pubkey)
 
     SendTransaction('RegisterVerifier', param, privkey, contract, 0)
 }
+
+
+
+
 
 
 (async function() {
