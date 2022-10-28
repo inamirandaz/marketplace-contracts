@@ -9,13 +9,13 @@ const { SHA256, enc } = require('crypto-js')
 
 
 //for testnet
-// const zilliqa = new Zilliqa('https://dev-api.zilliqa.com');
-// const CHAIN_ID = 333;  //Testnet
+const zilliqa = new Zilliqa('https://dev-api.zilliqa.com');
+const CHAIN_ID = 333;  //Testnet
 
 
 //for isolated server
-const zilliqa = new Zilliqa('http://localhost:5555');
-const CHAIN_ID = 222;  //local
+// const zilliqa = new Zilliqa('http://localhost:5555');
+// const CHAIN_ID = 222;  //local
 
 
 const MSG_VERSION = 1;
@@ -63,7 +63,7 @@ async function SendTransaction(transition, param, privkey, contract, amount)
             toAddr: toChecksumAddress(contract),
             amount: new BN(amount),
             gasPrice: units.toQa('2000', units.Units.Li),
-            gasLimit: Long.fromNumber(1000000),
+            gasLimit: Long.fromNumber(100000),
         },
         false,
     );
@@ -250,10 +250,10 @@ async function FulfillOrder(signer, privkey, contract, tokenAddr,
     const payment_token_addr = "0x0000000000000000000000000000000000000000"
     
     //use this for local isolated server
-    const bnum = 1 
+    // const bnum = 1 
  
     //otherwise use this
-    // const bnum = await(getCurrentBlockNumber())
+    const bnum = await(getCurrentBlockNumber())
  
     const msg = await(SerializeMessage(
                             tokenAddr, 
@@ -336,10 +336,16 @@ async function ClearPubkey(privkey, contract)
 
 
 (async function() {
-    privkey = '0xe53d1c3edaffc7a7bab5418eb836cf75819a82872b4a1a0f1c7fcf5c3e020b89'
-    recipient = '0xd90f2e538ce0df89c8273cad3b63ec44a3c4ed82'
-    buyerPrivkey = 'e7f59a4beb997a02a13e0d5e025b39a6f0adc64d37bb1e6a849a4863b4680411'
-    buyerAddr = '0xb028055ea3bc78d759d10663da40d171dec992aa'
+    // privkey = '0xe53d1c3edaffc7a7bab5418eb836cf75819a82872b4a1a0f1c7fcf5c3e020b89'
+    // recipient = '0xd90f2e538ce0df89c8273cad3b63ec44a3c4ed82'
+    // buyerPrivkey = 'e7f59a4beb997a02a13e0d5e025b39a6f0adc64d37bb1e6a849a4863b4680411'
+    // buyerAddr = '0xb028055ea3bc78d759d10663da40d171dec992aa'
+
+    privkey = '0x41cbbbdde1c31f18197056a3762c8e22ce423a65b7340575f43e3ec947affe74'
+    recipient = '0x594a7321d6a1d3ab741ef38ddca0eee33ecfd8ab'
+    buyerPrivkey = '0x823063fb7f18dcbe57c805d9ed2dde24c77864b469204b805d63770ccaf096c4'
+    buyerAddr = '0x98cedb6a36db035ed6aa68f8c565a4f2678b1568'
+
     tokenUri = 'https://ivefwfclqyyavklisqgz.supabase.co/storage/v1/object/public/nftstorage/collection_example/metadata/'
 
     const args = process.argv.slice(2)
@@ -402,7 +408,7 @@ async function ClearPubkey(privkey, contract)
                 id,
                 sale_price, 
                 side,
-                "345566",   //expiry
+                "4955865",   //expiry
                 amount
             )
             break;
