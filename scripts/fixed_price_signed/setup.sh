@@ -39,20 +39,31 @@ ret=`zli contract deploy -c $FP_FILE -i $FP_INIT  -p 2000000000 -l 40000`
 fp_addr="0x`echo "$ret" | grep "contract address" | awk '{print $(NF)}'`"
 echo $fp_addr
 
-
-echo "Setting an order"
-cd $TOOL_PATH
-token_id=1
-node contract.js setspender $zrc6_addr $token_id $fp_addr
-node contract.js setorder $fp_addr $zrc6_addr $token_id
+echo "Setting the verifier pub key"
 PUBKEY="0x03d3c94c377f0fb329dc5c857f7dbd7f694eecfca377db079b68ef7285905baa0b"
 node contract.js regpubkey $fp_addr $PUBKEY
+
+echo "Sell Order Side"
+SELL_SIDE=0
+BUY_SIDE=1
+SELLER_WALLET="seller"
+BUYER_WALLET="buyer"
+token_id=99
+cd $TOOL_PATH
+node contract.js setspender $zrc6_addr $token_id $fp_addr
+node contract.js setorder $fp_addr $zrc6_addr $token_id $SELL_SIDE $SELLER_WALLET
+node contract.js fulfillorder $fp_addr $zrc6_addr $token_id $SELL_SIDE $BUYER_WALLET
 cd -
 
-echo "Fulfilling an order"
+echo "Buy Order Side"
+token_id=80
 cd $TOOL_PATH
-node contract.js fulfillorder $fp_addr $zrc6_addr $token_id
+node contract.js setspender $zrc6_addr $token_id $fp_addr
+node contract.js setorder $fp_addr $zrc6_addr $token_id $SELL_SIDE $SELLER_WALLET
+node contract.js setorder $fp_addr $zrc6_addr $token_id $BUY_SIDE $BUYER_WALLET
+node contract.js fulfillorder $fp_addr $zrc6_addr $token_id $BUY_SIDE $SELLER_WALLET
 cd -
+
 
 
 echo "Contracts"

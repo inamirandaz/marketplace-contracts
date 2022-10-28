@@ -152,7 +152,7 @@ async function SetSpender(privkey, contract, tokenId, spender)
 }
 
 async function SetOrder(privkey, contract, tokenAddr, 
-                        tokenId, salePriceQa, side, expiryInBNum) 
+                        tokenId, salePriceQa, side, expiryInBNum, amount) 
 {
 
     console.log('SetOrder')
@@ -176,7 +176,7 @@ async function SetOrder(privkey, contract, tokenAddr,
         }
     ]
 
-    SendTransaction('SetOrder', param, privkey, contract, 0)
+    SendTransaction('SetOrder', param, privkey, contract, amount)
 }
 
 async function getCurrentBlockNumber() 
@@ -192,7 +192,6 @@ async function SerializeMessage(tokenAddr, tokenId, dest, side, price, payment_t
     const sideHexArray = bytes.intToHexArray(parseInt(side), 8);
     const priceHexArray = bytes.intToHexArray(parseInt(price), 32);
     const bnumHexArray = bytes.intToHexArray(bnum, 32);
-
 
     // Concat data to serialize
     msg = [tokenAddr.substring(2)]                      //remove '0x'
@@ -383,15 +382,21 @@ async function ClearPubkey(privkey, contract)
             fpContract = args[1]
             nftContract = args[2]
             id = args[3]
+            side = args[4]
+            wallet = args[5]
+            sender = wallet == "seller" ? privkey : buyerPrivkey
+            sale_price = "2000000"
+            amount = sender ==  buyerPrivkey ? sale_price : "0"
 
             SetOrder(
-                privkey,
+                sender,
                 fpContract,
                 nftContract,
                 id,
-                "2000000", 
-                "0", //sell order
-                "345566"
+                sale_price, 
+                side,
+                "345566",   //expiry
+                amount
             )
             break;
 
@@ -399,16 +404,22 @@ async function ClearPubkey(privkey, contract)
             fpContract = args[1]
             nftContract = args[2]
             id = args[3]
+            side = args[4]
+            wallet = args[5]
+            sender = wallet == "seller" ? privkey : buyerPrivkey 
+            sale_price = "2000000"
+            amount = sender ==  buyerPrivkey ? sale_price : "0"
 
             FulfillOrder(
-                privkey,
-                buyerPrivkey,
+                privkey, //use wallet 1 as the signer
+                sender,
                 fpContract,
                 nftContract,
                 id,
-                "2000000", 
-                "0", //sell order
-                buyerAddr
+                sale_price, 
+                side,
+                buyerAddr,
+                amount
             )
             break;
 
@@ -436,8 +447,8 @@ async function ClearPubkey(privkey, contract)
             console.log('1. batchmint <zrc6 addr> <start> <count>')
             console.log('2. mint <zrc6 addr>')
             console.log('3. setspender <zrc6 addr> <token id> <fixed price addr>')
-            console.log('4. setorder <fixed price addr> <nft addr> <token id>')
-            console.log('5. fulfillorder <fixed price addr> <nft addr> <token id>')
+            console.log('4. setorder <fixed price addr> <nft addr> <token id>  <side: 0|1, 0 for sell 1 for buy> <wallet: buyer | seller')
+            console.log('5. fulfillorder <fixed price addr> <nft addr> <token id> <side: 0|1, 0 for sell 1 for buy> <wallet: buyer | seller')
             console.log('6. regpubkey <fixed price addr> <pubkey')
             console.log('7. clearpubkey <fixed price addr>')
 
