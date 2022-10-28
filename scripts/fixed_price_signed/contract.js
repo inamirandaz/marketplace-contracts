@@ -22,7 +22,8 @@ const MSG_VERSION = 1;
 const VERSION = bytes.pack(CHAIN_ID, MSG_VERSION);
 
 
-function PrintTx(signedTx) {
+function PrintTx(signedTx) 
+{
     console.log('version: ' + signedTx.version.toString())
     console.log('nonce: ' + signedTx.nonce.toString())
     console.log('toAddr: ' + signedTx.toAddr.toString())
@@ -33,6 +34,16 @@ function PrintTx(signedTx) {
     console.log('code: ' +signedTx.code.toString())
     console.log('data: ' +signedTx.data.toString())
     console.log('signature: ' + signedTx.signature.toString())
+}
+
+function Trim(s) 
+{
+    return s.startsWith('0x') ? s.substring(2) : s;
+}
+
+function ToHexArray(num, size)
+{
+    return bytes.intToHexArray(parseInt(num), size);
 }
 
 async function SendTransaction(transition, param, privkey, contract, amount)
@@ -188,19 +199,14 @@ async function getCurrentBlockNumber()
 
 async function SerializeMessage(tokenAddr, tokenId, dest, side, price, payment_token_addr, bnum)
 {
-    const tokenIdHexArray = bytes.intToHexArray(parseInt(tokenId), 64);
-    const sideHexArray = bytes.intToHexArray(parseInt(side), 8);
-    const priceHexArray = bytes.intToHexArray(parseInt(price), 32);
-    const bnumHexArray = bytes.intToHexArray(bnum, 32);
-
     // Concat data to serialize
-    msg = [tokenAddr.substring(2)]                      //remove '0x'
-            .concat(tokenIdHexArray)
-            .concat([dest.substring(2)])                //remove '0x'
-            .concat(sideHexArray)
-            .concat(priceHexArray)
-            .concat([payment_token_addr.substring(2)])  //remove '0x'
-            .concat(bnumHexArray)
+    msg = [Trim(tokenAddr)]                      
+            .concat(ToHexArray(tokenId, 64))    // 256 bits->32 bytes->64 chars as hex
+            .concat([Trim(dest)])                
+            .concat(ToHexArray(side, 8))        // 32 bits->4 bytes->8 chars as hex
+            .concat(ToHexArray(price, 32))      // 128 bits->16 bytes->32 chars as hex
+            .concat([Trim(payment_token_addr)])  
+            .concat(ToHexArray(bnum, 32))       // 128 bits->16 bytes->32 chars as hex
             .join('');
 
     msg = '0x' + msg
@@ -212,17 +218,18 @@ async function SerializeMessage(tokenAddr, tokenId, dest, side, price, payment_t
 async function SignMessage(privkey, msg)
 {
     var ec = new EC('secp256k1');
-    const keyPair = ec.keyFromPrivate(privkey.substring(2)); //remove '0x'
+    const keyPair = ec.keyFromPrivate(Trim(privkey));
 
-    if (msg.startsWith('0x')) {
-        msg = msg.substring(2);
-    }
-    hashedmsg = SHA256(enc.Hex.parse(msg))
-    sigder = keyPair.sign(hashedmsg.toString(), 'hex', {canonical: true})
+    //create a digest from the message
+    digest = SHA256(enc.Hex.parse(Trim(msg)))
+
+    //signature must be in canonical form
+    sigder = keyPair.sign(digest.toString(), 'hex', {canonical: true})
 
     // Verify signature
-    // console.log(keyPair.verify(hashedmsg.toString(), signature));
+    // console.log(keyPair.verify(digest.toString(), signature));
 
+    //flatten the signature
     const sigrs = Buffer.concat([
         sigder.r.toArrayLike(Buffer, 'be', 32),
         sigder.s.toArrayLike(Buffer, 'be', 32),
@@ -245,7 +252,7 @@ async function FulfillOrder(signer, privkey, contract, tokenAddr,
     //use this for local isolated server
     const bnum = 1 
  
-    //othewise use this
+    //otherwise use this
     // const bnum = await(getCurrentBlockNumber())
  
     const msg = await(SerializeMessage(
