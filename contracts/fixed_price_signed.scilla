@@ -173,6 +173,8 @@ type Error =
   | OrderNotAuthorized
   | OrderExpired
   | InvalidVerifier
+  | NotSignedOrderModeEnabled
+  | NotSignedOrderModeDisabled
 
 
   
@@ -205,6 +207,8 @@ let make_error =
       | OrderNotAuthorized                 => Int32 -26
       | OrderExpired                       => Int32 -27
       | InvalidVerifier                    => Int32 -28  
+      | NotSignedOrderModeEnabled          => Int32 -29
+      | NotSignedOrderModeDisabled         => Int32 -30
 
       end
     in
@@ -274,8 +278,14 @@ field service_fee_bps: Uint128 = Uint128 250
 
 field service_fee_recipient: ByStr20 = initial_contract_owner
 
+
+(* Flag to check if order should be signed by the verifier or not *)
+(* Default to False *)
+field is_signed_order_mode: Bool = false
+
 (* Public key used to verify signed fulfill order *)
 field verifier_pub_key : ByStr33 = zero_pubkey
+
 
 (* Procedures *)
 procedure Throw(error : Error)
@@ -523,6 +533,28 @@ procedure RequireSenderNotToBeTokenOwner(token_address: ByStr20 with contract fi
   end
 end
 
+procedure RequireSignedOrderEnabled()
+  is_signed_order <- is_signed_order_mode;
+  match is_signed_order with
+  | True =>
+  | False =>
+    (* Signed order mode is not enabled *)
+    error = NotSignedOrderModeEnabled;
+    Throw error
+  end
+end
+
+procedure RequireSignedOrderDisabled()
+  is_signed_order <- is_signed_order_mode;
+  match is_signed_order with
+  | False =>
+  | True =>
+    (* Signed order mode is not enabled *)
+    error = NotSignedOrderModeDisabled;
+    Throw error
+  end
+end
+
 procedure RequireAddrInMessageToMatch(msg_addr: ByStr20, order_addr: ByStr20 )
   is_match = builtin eq msg_addr order_addr;
   match is_match with
@@ -579,7 +611,6 @@ procedure IsBlockNumberWithinRange(blocknum_data : Uint128)
     Throw err
   end
 end
-
 
 procedure RequireValidVerifer()
   pub_key <- verifier_pub_key;
@@ -875,6 +906,96 @@ procedure HandleFulfillOrder(
   event e
 end
 
+(* Fulfills orders *)
+procedure DoFulfillOrder(
+  token_address: ByStr20 with contract 
+    field royalty_recipient: ByStr20, 
+    field royalty_fee_bps: Uint128, 
+    field spenders: Map Uint256 ByStr20, 
+    field token_owners: Map Uint256 ByStr20 
+  end,
+  token_id: Uint256,
+  payment_token_address: ByStr20,
+  sale_price: Uint128,
+  side: Uint32,
+  (* `dest` enables buyers to set an address to receive the asset when fulfilling a sell order. *)
+  (* `dest` is only meaningful for buyers at the moment *)
+  dest: ByStr20
+  )
+  RequireNotPaused;
+  RequireAllowedUser _sender;
+  RequireAllowedUser dest;
+  RequireValidDestination dest;
+
+  is_sell_order = builtin eq side sell_side;
+  match is_sell_order with 
+  | True => 
+    (* Side: Sell *)
+    (* - Buyers can fulfill sell orders. *)
+    buyer = _sender;
+    maybe_sell_order <- sell_orders[token_address][token_id][payment_token_address][sale_price];
+
+    match maybe_sell_order with
+    | None => 
+      error = SellOrderNotFoundError;
+      Throw error
+    | Some (Order seller expiration_bnum) =>  
+      RequireNotExpired expiration_bnum;
+      (* Sender must not be the seller *)
+      RequireNotSelf seller;
+      
+      (* The currency is ZIL if the payment_token_address is zero address *)
+      is_native_zil = builtin eq payment_token_address zero_address;
+      match is_native_zil with
+      | False => 
+      | True => 
+        (* _amount must be equal to sale_price *)
+        RequireEqualZILAmount sale_price;
+        (* ZILs must be accepted only if a sell order is fulfilled *)
+        accept
+      end;
+
+      HandleFulfillOrder token_address token_id payment_token_address sale_price buyer seller side dest;
+      
+      (* Remove all sell orders. *)
+      (* When a sell order is fulfilled, the sell order is removed and the other sell orders for the token are also removed. *)
+      
+      (* Note that we should keep the buy orders for the new owner. *)
+      (* The following is the reasons why the existing buy orders should not be removed: *) 
+      (* a) The buyers don't have to create new buy orders every single time whenever the owner of the token has changed. *)
+      (* b) The new owner can sell the token again shortly by fulfilling existing buy orders. *)
+
+      delete sell_orders[token_address][token_id]
+    end
+  | False => 
+    (* Side: Buy *)
+    (* - Sellers can fulfill buy orders. *)
+    seller = _sender;
+    maybe_buy_order <- buy_orders[token_address][token_id][payment_token_address][sale_price];
+
+    match maybe_buy_order with
+    | None => 
+      error = BuyOrderNotFoundError;
+      Throw error
+    | Some (Order buyer expiration_bnum) =>  
+      RequireNotExpired expiration_bnum;
+      (* Sender must not be the buyer *)
+      RequireNotSelf buyer;
+      
+      HandleFulfillOrder token_address token_id payment_token_address sale_price buyer seller side buyer;
+
+      (* Remove all sell orders *)
+      delete sell_orders[token_address][token_id];
+      
+      (* - When a buy order is fulfilled, the buy order is removed. *)
+      (* Remove the buy order *)
+      (* Note that we should keep other buy orders for the new owner *)
+      delete buy_orders[token_address][token_id][payment_token_address][sale_price]
+    end
+  end
+end
+
+
 procedure Cancel(
   token_address: ByStr20 with contract 
     field royalty_recipient: ByStr20, 
@@ -1065,83 +1186,37 @@ transition FulfillOrder(
   side: Uint32,
   (* `dest` enables buyers to set an address to receive the asset when fulfilling a sell order. *)
   (* `dest` is only meaningful for buyers at the moment *)
+  dest: ByStr20
+  )
+  RequireSignedOrderDisabled;
+
+  DoFulfillOrder token_address token_id payment_token_address sale_price side dest
+
+end
+
+(* Fulfills orders *)
+transition FulfillOrderSigned(
+  token_address: ByStr20 with contract 
+    field royalty_recipient: ByStr20, 
+    field royalty_fee_bps: Uint128, 
+    field spenders: Map Uint256 ByStr20, 
+    field token_owners: Map Uint256 ByStr20 
+  end,
+  token_id: Uint256,
+  payment_token_address: ByStr20,
+  sale_price: Uint128,
+  side: Uint32,
+  (* `dest` enables buyers to set an address to receive the asset when fulfilling a sell order. *)
+  (* `dest` is only meaningful for buyers at the moment *)
   dest: ByStr20,
   message: ByStr, 
   signature: ByStr64
   )
-  RequireNotPaused;
-  RequireAllowedUser _sender;
-  RequireAllowedUser dest;
-  RequireValidDestination dest;
-
+  RequireSignedOrderEnabled;
   RequireValidVerifierSignature token_address token_id dest payment_token_address sale_price side message signature;
 
-  is_sell_order = builtin eq side sell_side;
-  match is_sell_order with 
-  | True => 
-    (* Side: Sell *)
-    (* - Buyers can fulfill sell orders. *)
-    buyer = _sender;
-    maybe_sell_order <- sell_orders[token_address][token_id][payment_token_address][sale_price];
+  DoFulfillOrder token_address token_id payment_token_address sale_price side dest
 
-    match maybe_sell_order with
-    | None => 
-      error = SellOrderNotFoundError;
-      Throw error
-    | Some (Order seller expiration_bnum) =>  
-      RequireNotExpired expiration_bnum;
-      (* Sender must not be the seller *)
-      RequireNotSelf seller;
-      
-      (* The currency is ZIL if the payment_token_address is zero address *)
-      is_native_zil = builtin eq payment_token_address zero_address;
-      match is_native_zil with
-      | False => 
-      | True => 
-        (* _amount must be equal to sale_price *)
-        RequireEqualZILAmount sale_price;
-        (* ZILs must be accepted only if a sell order is fulfilled *)
-        accept
-      end;
-
-      HandleFulfillOrder token_address token_id payment_token_address sale_price buyer seller side dest;
-      
-      (* Remove all sell orders. *)
-      (* When a sell order is fulfilled, the sell order is removed and the other sell orders for the token are also removed. *)
-      
-      (* Note that we should keep the buy orders for the new owner. *)
-      (* The following is the reasons why the existing buy orders should not be removed: *) 
-      (* a) The buyers don't have to create new buy orders every single time whenever the owner of the token has changed. *)
-      (* b) The new owner can sell the token again shortly by fulfilling existing buy orders. *)
-
-      delete sell_orders[token_address][token_id]
-    end
-  | False => 
-    (* Side: Buy *)
-    (* - Sellers can fulfill buy orders. *)
-    seller = _sender;
-    maybe_buy_order <- buy_orders[token_address][token_id][payment_token_address][sale_price];
-
-    match maybe_buy_order with
-    | None => 
-      error = BuyOrderNotFoundError;
-      Throw error
-    | Some (Order buyer expiration_bnum) =>  
-      RequireNotExpired expiration_bnum;
-      (* Sender must not be the buyer *)
-      RequireNotSelf buyer;
-      
-      HandleFulfillOrder token_address token_id payment_token_address sale_price buyer seller side buyer;
-
-      (* Remove all sell orders *)
-      delete sell_orders[token_address][token_id];
-      
-      (* - When a buy order is fulfilled, the buy order is removed. *)
-      (* Remove the buy order *)
-      (* Note that we should keep other buy orders for the new owner *)
-      delete buy_orders[token_address][token_id][payment_token_address][sale_price]
-    end
-  end
 end
 
 (* @multi-sig *)
@@ -1342,32 +1417,43 @@ transition AcceptContractOwnership()
   end
 end
 
+
+
 (* @multi-sig *)
-transition SetVerifier(pub_key: ByStr33)
+(* If this is enabled, all orders must be signed by the Verifier *)
+(* Verifier public key must be properly set *)
+transition EnableSignedOrder(pub_key: ByStr33)
   RequireContractOwner;
-  
+  RequireSignedOrderDisabled;
+
+  is_signed_order_mode := true;
   verifier_pub_key := pub_key;
 
   e = {
-    _eventname: "SetVerifier";
-    pub_key: pub_key
+    _eventname: "EnableSignedOrder";
+    is_signed_order_mode: true;
+    verifier_pub_key: pub_key
   };
-  event e  
+  event e
 end
 
-
 (* @multi-sig *)
-transition ClearVerifier()
+(* If this is disabled, orders do not need to be signed *)
+(* Verifier key is cleared *)
+transition DisableSignedOrder()
   RequireContractOwner;
-  
+  RequireSignedOrderEnabled;
+
+  is_signed_order_mode := false;
   verifier_pub_key := zero_pubkey;
 
   e = {
-    _eventname: "ClearVerifier"
+    _eventname: "DisableSignedOrder";
+    is_signed_order_mode: false;
+    verifier_pub_key: zero_pubkey
   };
-  event e  
+  event e
 end
-
 
 
 (* empty callbacks *)

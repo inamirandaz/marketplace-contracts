@@ -35,12 +35,15 @@ FP_FILE="../../contracts/fixed_price_signed.scilla"
 FP_INIT="init/init-fp.json"
 echo "Updating fixed price contract init file"
 sed -i "15s/.*/\"value\" : \"$collection_addr\"/" $FP_INIT
-ret=`zli contract deploy -c $FP_FILE -i $FP_INIT  -p 2000000000 -l 40000`
+ret=`zli contract deploy -c $FP_FILE -i $FP_INIT  -p 2000000000 -l 50000`
 fp_addr="0x`echo "$ret" | grep "contract address" | awk '{print $(NF)}'`"
 echo $fp_addr
 
 echo "Setting the verifier pub key"
+# Correct Public Key
 PUBKEY="0x03d3c94c377f0fb329dc5c857f7dbd7f694eecfca377db079b68ef7285905baa0b"
+# Wrong Public Key
+# PUBKEY="0x0271ce4f2c23fc81299eb10592b9ec015157f390fcc7b5e1bb29169314829e02be"
 node contract.js regpubkey $fp_addr $PUBKEY
 
 echo "Sell Order Side"
@@ -52,7 +55,7 @@ token_id=99
 cd $TOOL_PATH
 node contract.js setspender $zrc6_addr $token_id $fp_addr
 node contract.js setorder $fp_addr $zrc6_addr $token_id $SELL_SIDE $SELLER_WALLET
-node contract.js fulfillorder $fp_addr $zrc6_addr $token_id $SELL_SIDE $BUYER_WALLET
+node contract.js fulfillorder $fp_addr $zrc6_addr $token_id $SELL_SIDE $BUYER_WALLET 1
 cd -
 
 echo "Buy Order Side"
@@ -61,7 +64,18 @@ cd $TOOL_PATH
 node contract.js setspender $zrc6_addr $token_id $fp_addr
 node contract.js setorder $fp_addr $zrc6_addr $token_id $SELL_SIDE $SELLER_WALLET
 node contract.js setorder $fp_addr $zrc6_addr $token_id $BUY_SIDE $BUYER_WALLET
-node contract.js fulfillorder $fp_addr $zrc6_addr $token_id $BUY_SIDE $SELLER_WALLET
+node contract.js fulfillorder $fp_addr $zrc6_addr $token_id $BUY_SIDE $SELLER_WALLET 1
+cd -
+
+echo "Disabling signed order mode"
+token_id=70
+cd $TOOL_PATH
+node contract.js clearpubkey $fp_addr
+node contract.js setspender $zrc6_addr $token_id $fp_addr
+node contract.js setorder $fp_addr $zrc6_addr $token_id $SELL_SIDE $SELLER_WALLET
+#this should fail
+node contract.js fulfillorder $fp_addr $zrc6_addr $token_id $SELL_SIDE $BUYER_WALLET 1
+node contract.js fulfillorder $fp_addr $zrc6_addr $token_id $SELL_SIDE $BUYER_WALLET 0
 cd -
 
 
