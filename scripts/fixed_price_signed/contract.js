@@ -9,13 +9,13 @@ const { SHA256, enc } = require('crypto-js')
 
 
 //for testnet
-const zilliqa = new Zilliqa('https://dev-api.zilliqa.com');
-const CHAIN_ID = 333;  //Testnet
+// const zilliqa = new Zilliqa('https://dev-api.zilliqa.com');
+// const CHAIN_ID = 333;  //Testnet
 
 
 //for isolated server
-// const zilliqa = new Zilliqa('http://localhost:5555');
-// const CHAIN_ID = 222;  //local
+const zilliqa = new Zilliqa('http://localhost:5555');
+const CHAIN_ID = 222;  //local
 
 
 const MSG_VERSION = 1;
@@ -63,7 +63,7 @@ async function SendTransaction(transition, param, privkey, contract, amount)
             toAddr: toChecksumAddress(contract),
             amount: new BN(amount),
             gasPrice: units.toQa('2000', units.Units.Li),
-            gasLimit: Long.fromNumber(100000),
+            gasLimit: Long.fromNumber(1000000),
         },
         false,
     );
@@ -244,16 +244,16 @@ async function SignMessage(privkey, msg)
 
 
 
-async function FulfillOrder(signer, privkey, contract, tokenAddr, 
+async function FulfillOrderSigned(signer, privkey, contract, tokenAddr, 
                             tokenId, price, side, dest) 
 {
     const payment_token_addr = "0x0000000000000000000000000000000000000000"
     
     //use this for local isolated server
-    // const bnum = 1 
+    const bnum = 1 
  
     //otherwise use this
-    const bnum = await(getCurrentBlockNumber())
+    // const bnum = await(getCurrentBlockNumber())
  
     const msg = await(SerializeMessage(
                             tokenAddr, 
@@ -309,9 +309,61 @@ async function FulfillOrder(signer, privkey, contract, tokenAddr,
         }        
     ]
 
+    SendTransaction('FulfillOrderSigned', param, privkey, contract, price)
+
+}
+
+
+async function FulfillOrder(signer, privkey, contract, tokenAddr, 
+    tokenId, price, side, dest) 
+{
+    const payment_token_addr = "0x0000000000000000000000000000000000000000"
+
+    //use this for local isolated server
+    const bnum = 1 
+
+    //otherwise use this
+    // const bnum = await(getCurrentBlockNumber())
+
+    const param = [
+        {
+            "vname":"token_address",
+            "type":"ByStr20",
+            "value": tokenAddr
+        },
+        {
+            "vname":"token_id",
+            "type":"Uint256",
+            "value": tokenId
+        },
+        {
+            "vname":"payment_token_address",
+            "type":"ByStr20",
+            "value": payment_token_addr
+        },
+        {
+            "vname":"sale_price",
+            "type":"Uint128",
+            "value": price
+        },
+        {
+            "vname":"side",
+            "type":"Uint32",
+            "value": side
+        },
+        {
+            "vname":"dest",
+            "type":"ByStr20",
+            "value": dest
+        }
+    ]
+
     SendTransaction('FulfillOrder', param, privkey, contract, price)
 
 }
+
+
+
 
 async function RegPubkey(privkey, contract, pubkey)
 { 
@@ -323,28 +375,30 @@ async function RegPubkey(privkey, contract, pubkey)
         },
     ]
 
-    SendTransaction('SetVerifier', param, privkey, contract, 0)
+    SendTransaction('EnableSignedOrder', param, privkey, contract, 0)
 }
 
 async function ClearPubkey(privkey, contract)
 { 
     const param = []
 
-    SendTransaction('ClearVerifier', param, privkey, contract, 0)
+    SendTransaction('DisableSignedOrder', param, privkey, contract, 0)
 }
 
 
 
 (async function() {
-    // privkey = '0xe53d1c3edaffc7a7bab5418eb836cf75819a82872b4a1a0f1c7fcf5c3e020b89'
-    // recipient = '0xd90f2e538ce0df89c8273cad3b63ec44a3c4ed82'
-    // buyerPrivkey = 'e7f59a4beb997a02a13e0d5e025b39a6f0adc64d37bb1e6a849a4863b4680411'
-    // buyerAddr = '0xb028055ea3bc78d759d10663da40d171dec992aa'
+    // Use these accounts for isolated server
+    privkey = '0xe53d1c3edaffc7a7bab5418eb836cf75819a82872b4a1a0f1c7fcf5c3e020b89'
+    recipient = '0xd90f2e538ce0df89c8273cad3b63ec44a3c4ed82'
+    buyerPrivkey = 'e7f59a4beb997a02a13e0d5e025b39a6f0adc64d37bb1e6a849a4863b4680411'
+    buyerAddr = '0xb028055ea3bc78d759d10663da40d171dec992aa'
 
-    privkey = '0x41cbbbdde1c31f18197056a3762c8e22ce423a65b7340575f43e3ec947affe74'
-    recipient = '0x594a7321d6a1d3ab741ef38ddca0eee33ecfd8ab'
-    buyerPrivkey = '0x823063fb7f18dcbe57c805d9ed2dde24c77864b469204b805d63770ccaf096c4'
-    buyerAddr = '0x98cedb6a36db035ed6aa68f8c565a4f2678b1568'
+    // Use these accounts for testnet
+    // privkey = '0x41cbbbdde1c31f18197056a3762c8e22ce423a65b7340575f43e3ec947affe74'
+    // recipient = '0x594a7321d6a1d3ab741ef38ddca0eee33ecfd8ab'
+    // buyerPrivkey = '0x823063fb7f18dcbe57c805d9ed2dde24c77864b469204b805d63770ccaf096c4'
+    // buyerAddr = '0x98cedb6a36db035ed6aa68f8c565a4f2678b1568'
 
     tokenUri = 'https://ivefwfclqyyavklisqgz.supabase.co/storage/v1/object/public/nftstorage/collection_example/metadata/'
 
@@ -422,18 +476,37 @@ async function ClearPubkey(privkey, contract)
             sender = wallet == "seller" ? privkey : buyerPrivkey 
             sale_price = "2000000"
             amount = sender ==  buyerPrivkey ? sale_price : "0"
+            signed = args[6]
 
-            FulfillOrder(
-                privkey, //use wallet 1 as the signer
-                sender,
-                fpContract,
-                nftContract,
-                id,
-                sale_price, 
-                side,
-                buyerAddr,
-                amount
-            )
+            if (signed == "1") {
+                console.log("===== signed order")
+                FulfillOrderSigned(
+                    privkey, //use wallet 1 as the signer
+                    sender,
+                    fpContract,
+                    nftContract,
+                    id,
+                    sale_price, 
+                    side,
+                    buyerAddr,
+                    amount
+                )
+            }
+            else {
+                console.log("===== unsigned order")
+                FulfillOrder(
+                    privkey, //use wallet 1 as the signer
+                    sender,
+                    fpContract,
+                    nftContract,
+                    id,
+                    sale_price, 
+                    side,
+                    buyerAddr,
+                    amount
+                )
+            }
+
             break;
 
         case 'regpubkey' :
@@ -460,8 +533,8 @@ async function ClearPubkey(privkey, contract)
             console.log('1. batchmint <zrc6 addr> <start> <count>')
             console.log('2. mint <zrc6 addr>')
             console.log('3. setspender <zrc6 addr> <token id> <fixed price addr>')
-            console.log('4. setorder <fixed price addr> <nft addr> <token id>  <side: 0|1, 0 for sell 1 for buy> <wallet: buyer | seller')
-            console.log('5. fulfillorder <fixed price addr> <nft addr> <token id> <side: 0|1, 0 for sell 1 for buy> <wallet: buyer | seller')
+            console.log('4. setorder <fixed price addr> <nft addr> <token id>  <side: 0|1, 0 for sell 1 for buy> <wallet: buyer | seller>')
+            console.log('5. fulfillorder <fixed price addr> <nft addr> <token id> <side: 0|1, 0 for sell 1 for buy> <wallet: buyer | seller> <signed: 0|1, 0 for unsigned, 1 for signed')
             console.log('6. regpubkey <fixed price addr> <pubkey')
             console.log('7. clearpubkey <fixed price addr>')
 
