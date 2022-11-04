@@ -15,7 +15,6 @@ let false = False
 let true = True
 let zero_pubkey = 0x000000000000000000000000000000000000000000000000000000000000000000
 
-
 let min_bps = Uint128 1
 let max_bps = Uint128 10000
 
@@ -98,8 +97,6 @@ let bystr16_empty_string: ByStr16 = 0x00000000000000000000000000000000
 let bystr20_empty_string: ByStr20 = 0x0000000000000000000000000000000000000000
 let bystr32_empty_string: ByStr32 = 0x0000000000000000000000000000000000000000000000000000000000000000
 
-
-
 let bystr_to_bystr4: ByStr -> ByStr4 =
   fun(str : ByStr) =>
     let bystr4 = builtin to_bystr4 str in
@@ -175,7 +172,6 @@ type Error =
   | InvalidVerifier
   | NotSignedOrderModeEnabled
   | NotSignedOrderModeDisabled
-
 
   
 let make_error =
@@ -277,7 +273,6 @@ field allowed_payment_tokens: Map ByStr20 Bool = Emp ByStr20 Bool
 field service_fee_bps: Uint128 = Uint128 250
 
 field service_fee_recipient: ByStr20 = initial_contract_owner
-
 
 (* Flag to check if order should be signed by the verifier or not *)
 (* Default to False *)

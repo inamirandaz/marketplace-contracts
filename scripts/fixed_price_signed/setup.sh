@@ -31,7 +31,7 @@ collection_addr="0x`echo "$ret" | grep "contract address" | awk '{print $(NF)}'`
 echo $collection_addr
 
 echo "Deploying fixed price"
-FP_FILE="../../contracts/fixed_price_signed.scilla"
+FP_FILE="../../contracts/fixed_price.scilla"
 FP_INIT="init/init-fp.json"
 echo "Updating fixed price contract init file"
 sed -i "15s/.*/\"value\" : \"$collection_addr\"/" $FP_INIT
